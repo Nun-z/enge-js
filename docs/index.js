@@ -8,7 +8,6 @@ var loading = 0;
 var renderer = undefined;
 var canvas = undefined;
 var emulationTime = 0.0;
-var pads = undefined;
 var context = undefined;
 
 function readStorageStream(item, cb) {
@@ -166,6 +165,7 @@ function mainLoop(stamp) {
 
   endAnimationFrame = false;
   psx.setEvent(frameEvent, +totalCycles);
+  handleGamePads();
   while (!endAnimationFrame) {
     if (!entry.code) {
       entry.code = compileBlock(entry);//.bind(null);
@@ -351,7 +351,7 @@ function handleFileSelect(evt) {
   evt.stopPropagation();
   evt.preventDefault();
 
-  var fileList = evt.dataTransfer.files;
+  const fileList = evt.dataTransfer?.files || evt.target.files;
 
   var output = [];
   for (var i = 0, f; f = fileList[i]; i++) {
@@ -370,6 +370,7 @@ function init() {
 
   document.addEventListener('dragover', handleDragOver, false);
   document.addEventListener('drop', handleFileSelect, false);
+  document.getElementById('file').addEventListener('change', handleFileSelect, false);
 
   mainLoop(performance.now());
 
