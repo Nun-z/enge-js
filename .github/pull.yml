@@ -1,5 +1,5 @@
 version: "1"
 rules:
-  - base: master
-    upstream: kootstra:master    # change `wei` to the owner of upstream repo
+  - base: main
+    upstream: kootstra:main    # change `wei` to the owner of upstream repo
     mergeMethod: merge
