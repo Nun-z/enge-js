@@ -14,8 +14,8 @@
 //      load image at higher resolutions
 
 "use strict"
-var qwf = 1;
-var qhf = 1;
+var qwf = settings.quality || 1;
+var qhf = settings.quality || 1;
 var qwidth = 1024*qwf;
 var qheight = 512*qhf;
 
@@ -268,7 +268,7 @@ function WebGLRenderer(canvas) {
   this.drawOffsetY = 0
 
   this.displaymode = 2
-  this.vram = new Uint16Array(512*1024)
+  this.vram = new Uint16Array(512*1024);
 
   this.vertexClip = false;
   this.drawAreaChange = false;
@@ -283,9 +283,7 @@ function WebGLRenderer(canvas) {
       stencil: false,
 
       powerPreference: 'high-performance',
-
-      // failIfMajorPerformanceCaveat: true,
-      // desynchronized: false, // makes screen black if true?
+      // desynchronized: true, // makes screen black if true?
     });
   }
   catch (e) {
@@ -313,9 +311,6 @@ function WebGLRenderer(canvas) {
   else {
     alert( "Error: Your browser does not appear to support WebGL.");
   }
-
-  // this.metrics = {vertices:new Array(256),switches:0, triangles:0};
-  // this.metrics.vertices.fill(0);
 }
 
 WebGLRenderer.prototype.outsideDrawArea = function(x1,y1,x2,y2,x3,y3) {
@@ -435,12 +430,9 @@ WebGLRenderer.prototype.initTextures = function() {
     return
   }
 
-  const buf = new Uint8Array(2048*512*4);
-  buf.fill(0);
-
   // 8-bit video ram
   this.tex8vram = this.createTexture();
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 2048, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 2048, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
   this.buf8vram = this.createBuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, this.buf8vram);
@@ -449,8 +441,8 @@ WebGLRenderer.prototype.initTextures = function() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
   // Drawing
-  this.tex16draw = this.createTexture(gl.NEAREST);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, qwidth, qheight, 0, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  this.tex16draw = this.createTexture();
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, qwidth, qheight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
   this.buf16draw = this.createBuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, this.buf16draw);
@@ -458,7 +450,7 @@ WebGLRenderer.prototype.initTextures = function() {
 
   // Colour Mapping
   this.tex16rgba = this.createTexture();
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE,  null);
 
   this.buf16rgba = this.createBuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, this.buf16rgba);
@@ -468,39 +460,6 @@ WebGLRenderer.prototype.initTextures = function() {
 }
 
 WebGLRenderer.prototype.loadImage = function(x, y, w, h, buffer) {
-  // const gl = this.gl;
-  // const rgba = new Uint32Array(w * h);
-
-  // this.flushVertexBuffer(true);
-
-  // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  
-  // let draw_fb = gl.createFramebuffer();
-  // gl.bindFramebuffer(gl.FRAMEBUFFER, draw_fb);
-  // gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.tex16draw, 0);
-
-  // gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(rgba.buffer));
-
-  // for (let i = 0; i < h; ++i) {
-  //   for (let j = 0; j < w; ++j) {
-  //     let offset = i * w + j;
-  //     let data32 = rgba[offset];
-
-  //     let sbgr16 = 0;
-  //     sbgr16 |= ((data32 >>> 24) & 0xff) ? 0x8000 : 0x0000;
-  //     sbgr16 |= ((data32 >>> 19) & 0x1f) << 10;
-  //     sbgr16 |= ((data32 >>> 11) & 0x1f) <<  5;
-  //     sbgr16 |= ((data32 >>>  3) & 0x1f) <<  0;
-
-  //     buffer[offset] = sbgr16;
-  //   }
-  // }
-
-  // // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  // gl.bindFramebuffer(gl.FRAMEBUFFER, this.buf16draw);
-
-  // // var gl = this.gl;
-
   var o = 0;
   for (var j = 0; j < h; ++j) {
     for (var i = 0; i < w; ++i) {
@@ -508,7 +467,6 @@ WebGLRenderer.prototype.loadImage = function(x, y, w, h, buffer) {
       buffer[o++] = this.vram[offsetY + ((x+i)%1024)]
     }
   }
-  // console.log('loadImage', x, y, w, h)
 }
 
 WebGLRenderer.prototype.moveImage = function(sx, sy, dx, dy, w, h) {
@@ -543,35 +501,50 @@ WebGLRenderer.prototype.storeImage = function(img) {
   for (var j = 0; j < img.h; ++j) {
     const offsetY = ((img.y + j) % 512) * 1024;
     var x = img.x;
-    // for (var i = 0, il = img.w; i < il; ++i) {
     for (var i = img.w; i > 0; --i) {
       vram[offsetY + ((x++)%1024)] = data[o++];
     }
   }
 
   this.storeImageInTexture(img)
-  // console.log('storeImage', img.x, img.y, img.w, img.h)
 }
-
-// Uint8Array.prototype.setInt16 = function(index, value) {
-//   this[index]   = value;
-//   this[index+1] = value >> 8;
-// }
 
 var tex = new Uint8Array(2048*512*4*2);
 var xet = new Uint8Array(1024*512*4*2);
-WebGLRenderer.prototype.storeImageInTexture = function(img) {
-  var gl = this.gl;
+WebGLRenderer.prototype.storeImageInTexture = function (img) {
+  const gl = this.gl;
 
   // flush current vertices as a clut could be changed at this point.
   this.flushVertexBuffer(true);
   
-  var outsidebounds = false;
-  if ((img.x + img.w) > 1024) outsidebounds = true;
-  if ((img.y + img.h) >  512) outsidebounds = true;
-  if (outsidebounds) {
-    console.log('image out of bounds:', img.x, img.y, img.w, img.h);
-    // todo: implement proper vram wrapping
+  // out-of-bound horizontally
+  if ((img.x + img.w) > 1024) { 
+     let w1 = 1024 - img.x;
+     let w2 = img.w - w1;
+     let buf1 = new Uint16Array(w1*img.h);
+     let buf2 = new Uint16Array(w2*img.h);
+     let i1 = 0, i2 = 0;
+     for (let y = 0; y < img.h; ++y) {
+      const bo = y * img.w;
+      for (let x = 0; x < w1; ++x) {
+        buf1[i1++] = img.buffer[bo + x];
+      }
+      for (let x = 0; x < w2; ++x) {
+        buf2[i2++] = img.buffer[bo + x + w1];
+      }
+     }
+     this.storeImageInTexture({x:img.x, y:img.y, w:w1, h:img.h, buffer: buf1, pixelCount:i1});
+     this.storeImageInTexture({x:0, y:img.y, w:w2, h:img.h, buffer: buf2, pixelCount:i2});
+     return;
+  }
+
+  // out-of-bound vertically
+  if ((img.y + img.h) >  512) {
+    let h1 = 512 - img.y;
+    let h2 = img.h - h1;
+
+    this.storeImageInTexture({x:img.x, y:img.y, w:img.w, h:h1, buffer: new Uint16Array(img.buffer.buffer), pixelCount:h1*img.w});
+    this.storeImageInTexture({x:img.x, y:0, w:img.w, h:h2, buffer: new Uint16Array(img.buffer.buffer, h1*img.w*2), pixelCount:h2*img.w});
     return;
   }
   // mode 8-bit
@@ -582,13 +555,13 @@ WebGLRenderer.prototype.storeImageInTexture = function(img) {
     tex[(i << 3) + 0] = lo;
     tex[(i << 3) + 1] = (lo >>> 0) & 0xf;
     tex[(i << 3) + 2] = (lo >>> 4) & 0xf;
-    tex[(i << 3) + 3] = 0;//((sbgr >>> 15) & 0x01) ? 255 : 0; // a
+    tex[(i << 3) + 3] = 0;
 
     var hi = (sbgr >>> 8) & 0xff;
     tex[(i << 3) + 4] = hi;
     tex[(i << 3) + 5] = (hi >>> 0) & 0xf;
     tex[(i << 3) + 6] = (hi >>> 4) & 0xf;
-    tex[(i << 3) + 7] = 0;//((sbgr >>> 15) & 0x01) ? 255 : 0; // a;
+    tex[(i << 3) + 7] = 0;
 
     xet[(i << 2) + 0] = ((sbgr >>>  0) & 0x1f) << 3;      // r
     xet[(i << 2) + 1] = ((sbgr >>>  5) & 0x1f) << 3;      // g
@@ -602,9 +575,7 @@ WebGLRenderer.prototype.storeImageInTexture = function(img) {
   gl.bindTexture(gl.TEXTURE_2D, this.tex16rgba);
   gl.texSubImage2D(gl.TEXTURE_2D, 0, img.x, img.y, img.w, img.h, gl.RGBA, gl.UNSIGNED_BYTE, xet);
 
-// needed for 16bit video
-//  if (gpu.status & (1 << 21)) return
-
+  // needed for 16bit video
   var x1 = img.x; var x2 = img.x + img.w;
   var y1 = img.y; var y2 = img.y + img.h;
   var buffer = this.getVertexBuffer(6, 0); 
@@ -735,10 +706,9 @@ WebGLRenderer.prototype.setupProgramDraw = function() {
 }
 
 WebGLRenderer.prototype.flushVertexBuffer = function(clip) {
-  var gl = this.gl;
+  const gl = this.gl;
 
   if (this.vertexBuffer.index <= 0) {
-    // ++this.metrics.vertices[0];
     return;
   }
 
@@ -757,14 +727,11 @@ WebGLRenderer.prototype.flushVertexBuffer = function(clip) {
     this.vertexClip = clip;
   }
 
+  const drawBuffer = this.vertexBuffer.view();
+  gl.bufferSubData(gl.ARRAY_BUFFER, 0, drawBuffer);
 
-  var drawBuffer = this.vertexBuffer.view();//.subarray(0, this.vertexBuffer.index / 4);
-  // gl.bufferSubData(gl.ARRAY_BUFFER, 0, drawBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, drawBuffer, gl.STREAM_DRAW);
-  var vertices = this.vertexBuffer.getNumberOfVertices();
+  const vertices = this.vertexBuffer.getNumberOfVertices();
   gl.drawArrays(gl.TRIANGLES, 0, vertices);
-  // ++this.metrics.vertices[vertices/3];
-  // this.metrics.triangles += vertices/3;
 
   this.vertexBuffer.reset();
 }
@@ -801,7 +768,6 @@ WebGLRenderer.prototype.setBlendMode = function(mode) {
             // gl.uniform1f(this.programDraw.blendAlpha, 0.00);
             break;
   }
-  // ++this.metrics.switches;
 }
 
 WebGLRenderer.prototype.getVertexBuffer = function(cnt, pid) {
@@ -1045,37 +1011,31 @@ WebGLRenderer.prototype.drawRectangle = function(data, tx, ty, cl) {
   }
 }
 
-WebGLRenderer.prototype.clearVRAM = function(x, y, w, h) {
-  var gl = this.gl;
-
-  gl.bindFramebuffer(gl.FRAMEBUFFER, this.buf8vram);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.tex8vram, 0);
-
-  gl.scissor(x << 1, y, w << 1, h);
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-
-  gl.bindFramebuffer(gl.FRAMEBUFFER, this.buf16draw);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.tex16draw, 0);
-}
+const clr = new Uint32Array(2*1024*512);
+const view = new Uint8Array(clr.buffer);
 
 WebGLRenderer.prototype.fillRectangle = function(data) {
+  var gl = this.gl;
+
   var x = (data[1] << 16) >> 16;
   var y = (data[1] >> 16);
   var c = (data[0] & 0xf8f8f8);
   var w = (data[2] << 16) >>> 16;
   var h = (data[2] >> 16) >>> 0;
-  // w = ((w + 15) >> 4) << 4;
-  // h = ((h + 15) >> 4) << 4;
-  // x = ((x + 15) >> 4) << 4;
-  // y = ((y + 15) >> 4) << 4;
   x = (x & 0x3f0);
   y = (y & 0x1ff);
   w = ((w & 0x3ff) + 15) & ~15;
   h = (h & 0x1ff);
   if (!w && !h) return;
 
+  clr.fill(c, 0, 2*w*h);
+
   this.flushVertexBuffer(true);
+
+  gl.bindTexture(gl.TEXTURE_2D, this.tex8vram);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, x*2, y, w*2, h, gl.RGBA, gl.UNSIGNED_BYTE, view);
+  gl.bindTexture(gl.TEXTURE_2D, this.tex16draw);
+
   var buffer = this.getVertexBuffer(6, 0);
   buffer.addVertex(x+0, y+0, c);
   buffer.addVertex(x+w, y+0, c);
@@ -1085,7 +1045,6 @@ WebGLRenderer.prototype.fillRectangle = function(data) {
   buffer.addVertex(x+w, y+0, c);
   buffer.addVertex(x+w, y+h, c);
   this.flushVertexBuffer(false);
-  this.clearVRAM(x, y, w, h, c); // really needed sadly for Castlevania
 }
 
 WebGLRenderer.prototype.setDrawAreaOF = function(x, y) {
@@ -1167,11 +1126,11 @@ WebGLRenderer.prototype.onVBlankEnd = function() {
     var drawBuffer = this.vertexBuffer.subarray(0, this.vertexBuffer.index / 4)
     gl.viewport(0, 0, this.canvas.width, this.canvas.height)
 
-    // if (gpu.status & (1 << 23)) {
-    //   gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    //   gl.clear(gl.COLOR_BUFFER_BIT);
-    // }
-    // else
+    if (gpu.status & (1 << 23)) {
+      gl.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    else
     if (gpu.status & (1 << 21)) {
       display24bit(this, drawBuffer, al, at)
     }
@@ -1187,7 +1146,11 @@ WebGLRenderer.prototype.onVBlankEnd = function() {
 
 WebGLRenderer.prototype.setMode = function(mode) {
   switch (mode) {
+    case 'disp':  this.displaymode = 2;
+                  break
     case 'vram':  this.displaymode = 1;
+                  break
+    case 'text':  this.displaymode = 0;
                   break
     default    :  this.displaymode = 2;
                   break
