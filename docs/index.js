@@ -124,9 +124,6 @@ joy.eventIRQ = psx.addEvent(0, joy.completeIRQ.bind(joy));
 mdc.event = psx.addEvent(0, mdc.complete.bind(mdc));
 
 dot.event = psx.addEvent(0, dot.complete.bind(dot));
-// rc0.event = psx.addEvent(0, rc0.complete.bind(rc0));
-// rc1.event = psx.addEvent(0, rc1.complete.bind(rc1));
-// rc2.event = psx.addEvent(0, rc2.complete.bind(rc2));
 
 let frameEvent = psx.addEvent(0, endMainLoop);
 let endAnimationFrame = false;
@@ -143,8 +140,8 @@ function mainLoop(stamp) {
 
   context.realtime += delta;
 
-  let diffTime = context.emutime - context.realtime;
-  const timeToEmulate = 10.0 - diffTime;
+  let diffTime = context.realtime - context.emutime;
+  const timeToEmulate = diffTime;
 
   const totalCycles = timeToEmulate * (768*44.100);
 
@@ -291,10 +288,9 @@ function loadFileData(arrayBuffer) {
         tracks.push({id, begin, end, audio:true});
       }
     }
+    cdr.setCdImage(data);
     cdr.setTOC(tracks);
 
-    cdr.hasCdFile = true;
-    cdr.cdImage = data;
     running = true;
   }
   else if (data[0] === 0x0000434d) { // MEMCARD
@@ -416,9 +412,10 @@ function init() {
     if (e.keyCode === 123) return; //f12
     if (e.keyCode === 116) return; //f5
 
-    if (e.key === 'F1' && e.ctrlKey) renderer.setMode('disp');
-    if (e.key === 'F2' && e.ctrlKey) renderer.setMode('vram');
-    if (e.key === 'F3' && e.ctrlKey) renderer.setMode('text');
+    if (e.key === '1' && e.ctrlKey) renderer.setMode('disp');
+    if (e.key === '2' && e.ctrlKey) renderer.setMode('draw');
+    if (e.key === '3' && e.ctrlKey) renderer.setMode('clut8');
+    if (e.key === '4' && e.ctrlKey) renderer.setMode('clut4');
 
     e.preventDefault();
   }, false);
