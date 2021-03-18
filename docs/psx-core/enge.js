@@ -26,6 +26,7 @@ var cpu = {
   'lo' : 0,
   'pc' : 0,
   'sr' : 0,
+  forceWriteBits: 0x00000000 >>> 0,
 
   getCtrl: function(reg) {
     switch (reg) {
@@ -46,7 +47,10 @@ var cpu = {
       case  7:  break;
       case  9:  break;
       case 11:  break;
-      case 12:  this.sr = value; break;
+      case 12:  this.sr = value; 
+                // trick to force writing to unused memory location with isolated cache
+                this.forceWriteBits = (value & 0x00010000) ? 0x01ffffff >>> 0 : 0x00000000 >>> 0;
+                break;
       case 13:  this.cause = this.cause & 0xfffffcff;
                 this.cause |= (value & 0x00000300); 
                 break;
@@ -201,16 +205,10 @@ var cpu = {
   }
 };
 
-const cache = new Map();
-// cache.fill(null);
-
-const vector = getCacheEntry(0x80000080);
-
 function cpuException(id, pc) {
   cpu.sr    = (cpu.sr & ~0x3F) | ((cpu.sr << 2) & 0x3F);
   cpu.cause = (cpu.cause & ~0x7C) | id;
   cpu.epc   = pc;
-  //console.error(hex(cpu.pc));
   return vector;
 }
 
@@ -224,45 +222,9 @@ function cpuInterrupt(entry) {
     else
     if ((cpu.sr & 0x400) === 0x400) {
       if (cpu.istat & cpu.imask) {
-        // log('cpuInterrupt:', hex(cpu.istat & cpu.imask));
         return cpuException(0x400, entry.pc);
       }
     }
-  }
-  return entry;
-}
-
-function getCacheIndex(pc) {
-  pc = pc & 0x01ffffff;
-  if (pc < 0x800000) pc &= 0x1fffff;
-  return pc >>> 2;
-}
-
-function clearCodeCache(addr, size) {
-  const words = !size ? 4 >>> 0 : size >>> 0;
-
-  for (let i = 0 >>> 0; i < words; i += 4) {
-    const lutIndex = getCacheIndex((addr >>> 0) + i);
-    let entry = cache.get(lutIndex);
-    if (entry) entry.code = null;
-  }
-}
-
-function getCacheEntry(pc) {
-  const lutIndex = getCacheIndex(pc);
-  let entry = cache.get(lutIndex);
-
-  if (!entry) {
-    cache.set(lutIndex, entry = {
-      pc: (pc >>> 0) & 0x01ffffff,
-      calls: 0,
-      clock: 0,
-      addr: hex(pc),
-      code: null,
-      jump: null,
-      next: null,
-    });
-    Object.seal(entry);
   }
   return entry;
 }

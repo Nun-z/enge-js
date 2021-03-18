@@ -536,17 +536,6 @@ var state = {
   }
 };
 
-const hleIDLE = [
-  '// ........: 8fa20010: lw      r2, $0010(r29)',
-  '// ........: 00000000: nop',
-  '// ........: 2442ffff: addiu   r2, r2, $ffff',
-  '// ........: afa20010: sw      r2, $0010(r29)',
-  '// ........: 8fa20010: lw      r2, $0010(r29)',
-  '// ........: 00000000: nop',
-  'let addr = ((16 + gpr[29]) & 0x001fffff) >> 2;',
-  'gpr[2] = (map[addr] = map[addr] - 1) >> 0;',
-];
-
 function compileBlockLines(entry) {
   const pc = entry.pc >>> 0;
   state.clear();
@@ -555,35 +544,17 @@ function compileBlockLines(entry) {
 
   const lines = [];
 
+  // todo: limit the amount of cycles per block
   while (!state.stop) {
     compileInstruction(state, lines);
     state.cycles += 1;
     state.pc += 4;
-
-    // if (!state.stop && state.cycles >= 32) {
-    //   state.branchTarget = state.pc;
-    //   lines.push(`target = _${hex(state.pc)};`);
-    //   console.log('large function at $'+pc.toString(16)+' with '+state.cycles);
-    //   break;
-    // }
   }
 
   if (state.stop && (!state.break && !state.syscall && !state.sr)) {
     compileInstruction(state, lines);
     state.cycles += 1;
     state.pc += 4;
-  }
-
-  // check for idle loop
-  if ((lines[0].indexOf('8fa20010: lw') !== -1) 
-   && (lines[1].indexOf('00000000: nop') !== -1)
-   && (lines[2].indexOf('2442ffff: addiu') !== -1)
-   && (lines[3].indexOf('afa20010: sw') !== -1)
-   && (lines[4].indexOf('8fa20010: lw') !== -1)
-   && (lines[5].indexOf('00000000: nop') !== -1)) {
-    // console.warn('idle loop detected');
-    lines.splice(0, 6, ...hleIDLE);
-    state.cycles += 11;
   }
 
   if (pc === 0xa0 || pc === 0xb0 || pc === 0xc0) {
@@ -667,7 +638,6 @@ function compileBlock(entry) {
 
   lines.unshift(`const gpr = cpu.gpr; let target = _${hex(pc)};`);
 
-
   return createFunction(pc, lines.filter(a => a).join('\n'), jumps);
 }
 
@@ -690,3 +660,45 @@ function getCodeStats(level, mostCalledItems) {
 
   return items.sort((a,b) => b.calls-a.calls).slice(0,mostCalledItems||10);
 }
+
+// an array is faster but consumes much more memory, deliberatly chosen for memory here,
+const cache = new Map();
+Object.seal(cache);
+
+function getCacheIndex(pc) {
+  pc = pc & 0x01ffffff;
+  if (pc < 0x800000) pc &= 0x1fffff;
+  return pc >>> 2;
+}
+
+function clearCodeCache(addr, size) {
+  const words = !size ? 4 >>> 0 : size >>> 0;
+
+  for (let i = 0 >>> 0; i < words; i += 4) {
+    const lutIndex = getCacheIndex((addr >>> 0) + i);
+    let entry = cache.get(lutIndex);
+    if (entry) entry.code = null;
+  }
+}
+
+function getCacheEntry(pc) {
+  const lutIndex = getCacheIndex(pc);
+  let entry = cache.get(lutIndex);
+
+  if (!entry) {
+    cache.set(lutIndex, entry = {
+      code: null,
+      pc: lutIndex << 2,
+      // inline: false,
+      // calls: 0,
+      // clock: 0,
+      addr: hex(lutIndex << 2),
+      jump: null,
+      next: null,
+    });
+    Object.seal(entry);
+  }
+  return entry;
+}
+
+const vector = getCacheEntry(0x80000080);

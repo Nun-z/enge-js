@@ -314,20 +314,20 @@ var mdc = {
         break;
 
       case 0x2:
-        console.log("[mdec-in] quant table:", hex(mdc.r1820), transferSize << 2);
+        // console.log("[mdec-in] quant table:", hex(mdc.r1820), transferSize << 2);
         video.iqtab_init(addr, transferSize << 2);
         if (mdc.r1820 !== 0x40000001) return abort('unsupported quant mode');
         break;
 
       case 0x3:
-        console.log("[mdec-in] scale table: NYI", transferSize << 2);
+        // console.log("[mdec-in] scale table: NYI", transferSize << 2);
         // for (let i = 0; i < transferSize; ++i) {
         //   console.log(hex(addr+(i << 2)), ':', hex(map[(addr >> 2) + i]));
         // }
         break;
 
       default:
-        console.log('not implemented', mdc.r1820 >>> 29);
+        // console.log('not implemented', mdc.r1820 >>> 29);
     }
 
     return transferSize;
@@ -336,7 +336,7 @@ var mdc = {
   dmaTransferMode0200: function(addr, blck) {
     addr = addr & 0x001fffff; // ram always
     const numberOfWords = (blck >>> 16) * (blck & 0xffff);
-    clearCodeCache( addr, numberOfWords << 2);
+    // clearCodeCache( addr, numberOfWords << 2); // optimistice assumption (performance reasons)
 
     var blk = mdc.block;
     var end = addr + (numberOfWords << 2);

@@ -93,7 +93,8 @@ var gpu = {
     return {x:gpu.dispX, y:gpu.dispY, w:width, h:height};
   },
 
-  onScanLine: function () {
+  onScanLine: function (scanline) {
+    gpu.hline = scanline;
     let interlaced = gpu.status & (1 << 22);
 	  let PAL = ((gpu.status >> 20) & 1) ? true : false;
     let vsync = PAL ? 314 : 263;
@@ -123,12 +124,12 @@ var gpu = {
     if (gpu.hline === vblankbegin) {
       renderer.onVBlankBegin();
       gpu.status &= 0x7fffffff;
+      cpu.istat |= 0x0001;
     }
     if (gpu.hline === vblankend) {
       renderer.onVBlankEnd();
     }
     if (++gpu.hline >= vsync) {
-      cpu.istat |= 0x0001;
       gpu.hline = 0;
       ++gpu.frame;
     }
@@ -501,15 +502,14 @@ var gpu = {
 
   dmaTransferMode0200: function(addr, blck) {
     var transferSize = (blck >> 16) * (blck & 0xFFFF) << 1;
-    clearCodeCache( addr, transferSize << 1);
+    // clearCodeCache( addr, transferSize << 1); // optimistice assumption (performance reasons)
 
     gpu.transferTotal -= transferSize;
 
+    const img = gpu.img;
     while (--transferSize >= 0) {
-      const data = gpu.img.buffer[gpu.img.index];
+      const data = gpu.img.buffer[img.index++];
       map16[(addr & 0x001fffff) >>> 1] = data;
-      // map.setInt16(addr & 0x1fffff, value);
-      gpu.img.index++;
       addr += 2;
     }
 
@@ -527,11 +527,10 @@ var gpu = {
     var transferSize = (blck >> 16) * (blck & 0xFFFF) << 1;
     gpu.transferTotal -= transferSize;
 
+    const img = gpu.img;
     while (--transferSize >= 0) {
       const data = map16[(addr & 0x001fffff) >>> 1];
-      // var value = map.getInt16(addr & 0x1fffff);
-      gpu.img.buffer[gpu.img.index] = data;
-      gpu.img.index++;
+      img.buffer[img.index++] = data;
       addr += 2;
     }
 
@@ -615,7 +614,7 @@ var gpu = {
     }
     map[addr >> 2] = 0x00ffffff;
 
-    clearCodeCache(addr, transferSize << 2);
+    // clearCodeCache(addr, transferSize << 2); // optimistice assumption (performance reasons)
     return transferSize;
   },
 }
