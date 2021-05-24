@@ -1,5 +1,6 @@
 'use strict';
 
+const speedFactor = 1.0;
 var running = false;
 var originalSpeed = true;
 var realtimeStart = 0;
@@ -9,17 +10,6 @@ var renderer = undefined;
 var canvas = undefined;
 var emulationTime = 0.0;
 var context = undefined;
-
-function readStorageStream(item, cb) {
-  const base64text = localStorage.getItem(item);
-  if (base64text) {
-    const arrayBuffer = Base64.decode(base64text);
-    cb(arrayBuffer);
-  }
-  else {
-    cb(null);
-  }
-}
 
 var abort = function() {
   console.error(Array.prototype.slice.call(arguments).join(' '));
@@ -45,7 +35,6 @@ var context = window.context= {
   timeStamp: 0,
   realtime: 0,
   emutime: 0,
-  jstime: 0
 };
 
 const psx = {
@@ -125,7 +114,7 @@ Object.seal(psx);
 
 psx.addEvent(0, spu.event.bind(spu));
 dma.eventDMA0 = psx.addEvent(0, dma.completeDMA0.bind(dma));
-dma.eventDMA1 = psx.addEvent(0, dma.completeDMA1.bind(dma));
+// dma.eventDMA1 = psx.addEvent(0, dma.completeDMA1.bind(dma));
 dma.eventDMA2 = psx.addEvent(0, dma.completeDMA2.bind(dma));
 dma.eventDMA3 = psx.addEvent(0, dma.completeDMA3.bind(dma));
 dma.eventDMA4 = psx.addEvent(0, dma.completeDMA4.bind(dma));
@@ -136,9 +125,6 @@ joy.eventIRQ = psx.addEvent(0, joy.completeIRQ.bind(joy));
 mdc.event = psx.addEvent(0, mdc.complete.bind(mdc));
 
 dot.event = psx.addEvent(0, dot.complete.bind(dot));
-// rc0.event = psx.addEvent(0, rc0.complete.bind(rc0));
-// rc1.event = psx.addEvent(0, rc1.complete.bind(rc1));
-// rc2.event = psx.addEvent(0, rc2.complete.bind(rc2));
 
 let frameEvent = psx.addEvent(0, endMainLoop);
 let endAnimationFrame = false;
@@ -147,38 +133,40 @@ function endMainLoop(self, clock) {
   self.active = false;
 }
 
+let switches = 0;
 function mainLoop(stamp) {
   window.requestAnimationFrame(mainLoop);
   const delta = stamp - context.timeStamp;
   context.timeStamp = stamp;
-  if (!running || !hasFocus || delta > 200) return;
+  if (!running || !hasFocus || delta > 250) return;
 
-  context.realtime += delta;
+  context.realtime += delta * speedFactor;
 
-  let diffTime = context.emutime - context.realtime;
-  const timeToEmulate = 10.0 - diffTime;
+  let diffTime = context.realtime - context.emutime;
+  const timeToEmulate = diffTime;
 
   const totalCycles = timeToEmulate * (768*44.100);
-  let jstime = performance.now();
 
   let entry = getCacheEntry(cpu.pc);
+  if (!entry) return abort('invalid pc')
 
   endAnimationFrame = false;
   psx.setEvent(frameEvent, +totalCycles);
   handleGamePads();
   while (!endAnimationFrame) {
     if (!entry.code) {
-      entry.code = compileBlock(entry);//.bind(null);
+      entry.code = compileBlock(entry);
     }
     entry = entry.code(psx);
+    ++switches;
+    // let next = entry.code(psx);
+    // if (!next) debugger;
+    // entry = next;
   }
   cpu.pc = entry.pc;
 
-  jstime = performance.now() - jstime;
-  context.jstime += jstime;
   // correct the emulation time accourding to the psx.clock
   context.emutime =  psx.clock / (768*44.100);
-  // console.log(context.jstime/context.emutime);
 }
 
 function bios() {
@@ -188,12 +176,16 @@ function bios() {
   const $ = psx;
   while (entry.pc !== 0x00030000) {
     if (!entry.code) {
-      entry.code = compileBlock(entry);//.bind(null);
+      entry.code = compileBlock(entry);
     }
     entry = entry.code(psx);
+    ++switches;
+    // let next = entry.code(psx);
+    // if (!next) debugger;
+    // entry = next;
   }
   context.realtime = context.emutime =  psx.clock / (768*44.100);
-
+  vector = getCacheEntry(0x80);
   cpu.pc = entry.pc;
 }
 
@@ -227,8 +219,8 @@ function loadFileData(arrayBuffer) {
   if ((data[0] & 0xffff) === 0x5350) { // PS
     cpu.pc = data.getInt32(0x10);
     cpu.gpr[28] = data.getInt32(0x14);
-    if (data.getInt32(0x30)) cpu.gpr[29] = data.getInt32(0x30);
-    if (data.getInt32(0x30)) cpu.gpr[30] = data.getInt32(0x30);
+    cpu.gpr[29] = data.getInt32(0x30) ? data.getInt32(0x30) : 0x001fff00;
+    cpu.gpr[30] = data.getInt32(0x30) ? data.getInt32(0x30) : 0x001fff00;
     cpu.gpr[31] = cpu.pc;
     console.log('init-pc  : $', hex(cpu.pc >>> 0));
     console.log('init-gp  : $', hex(cpu.gpr[28] >>> 0));
@@ -240,22 +232,14 @@ function loadFileData(arrayBuffer) {
     console.log('data-addr: $', hex(data.getInt32(0x20) >>> 0));
     console.log('data-size: $', hex(data.getInt32(0x24) >>> 0));
 
-    // for (let i = 0; i < 0x40;i+=4) {
-    //   console.log(hex(data.getInt32(i) >>> 0))
-    // }
-
     var textSegmentOffset = data.getInt32(0x18);
-    var fileContentLength = data.getInt32(0x1C);
+    var fileContentLength = view8.length;
     for (var i = 0; i < fileContentLength; ++i) {
       map8[(textSegmentOffset & 0x001fffff) >>> 0] = view8[(0x800 + i) >>> 0];
-      // map.setInt8(textSegmentOffset & 0x1FFFFF, data.getInt8(0x800 + i));
       textSegmentOffset++;
     }
-    // psx.addEvent(44100*768*60, (self, clock) => {
-    //   running = false;
-    //   spu.silence();
-    //   throw 'stoped';
-    // });
+
+    clearCodeCache(data.getInt32(0x18), view8.length);
     running = true;
   }
   else if (data[0] === 0xffffff00) { // ISO
@@ -313,10 +297,9 @@ function loadFileData(arrayBuffer) {
         tracks.push({id, begin, end, audio:true});
       }
     }
+    cdr.setCdImage(data);
     cdr.setTOC(tracks);
 
-    cdr.hasCdFile = true;
-    cdr.cdImage = data;
     running = true;
   }
   else if (data[0] === 0x0000434d) { // MEMCARD
@@ -328,12 +311,9 @@ function loadFileData(arrayBuffer) {
     }
   }
   else if (arrayBuffer.byteLength === 524288) {
-    const base64text = Base64.encode(arrayBuffer);
-    localStorage.setItem('bios', base64text);
+    writeStorageStream('bios', arrayBuffer);
     for (var i = 0; i < 0x00080000; i += 4) {
       map[(0x01c00000 + i) >>> 2] = data[i >>> 2];
-      // map[(0x01c00000 + i) >>> 2] = data.getInt32(i);
-      // map.setInt32(0x01c00000 + i, data.getInt32(i));
     }
     bios();
     let header = document.querySelector('span.nobios');
@@ -351,7 +331,7 @@ function handleFileSelect(evt) {
   evt.stopPropagation();
   evt.preventDefault();
 
-  const fileList = evt.dataTransfer?.files || evt.target.files;
+  const fileList = evt.dataTransfer ? evt.dataTransfer.files : evt.target.files;
 
   var output = [];
   for (var i = 0, f; f = fileList[i]; i++) {
@@ -364,6 +344,26 @@ function handleDragOver(evt) {
   evt.preventDefault();
 }
 
+// default keyboard mapping
+const keyboard = new Map();
+keyboard.set(69, {bits: 0x10, property: 'hi'}); /*  [^]  */
+keyboard.set(68, {bits: 0x20, property: 'hi'}); /*  [O]  */
+keyboard.set(88, {bits: 0x40, property: 'hi'}); /*  [X]  */
+keyboard.set(83, {bits: 0x80, property: 'hi'}); /*  [#]  */
+
+keyboard.set(81, {bits: 0x01, property: 'hi'}); /*  [L2]  */
+keyboard.set(84, {bits: 0x02, property: 'hi'}); /*  [R2]  */
+keyboard.set(87, {bits: 0x04, property: 'hi'}); /*  [L1]  */
+keyboard.set(82, {bits: 0x08, property: 'hi'}); /*  [R1]  */
+
+keyboard.set(38, {bits: 0x10, property: 'lo'}); /*  [u]  */
+keyboard.set(39, {bits: 0x20, property: 'lo'}); /*  [r]  */
+keyboard.set(40, {bits: 0x40, property: 'lo'}); /*  [d]  */
+keyboard.set(37, {bits: 0x80, property: 'lo'}); /*  [l]  */
+
+keyboard.set(32, {bits: 0x01, property: 'lo'}); /* [sel] */
+keyboard.set(13, {bits: 0x08, property: 'lo'}); /*[start]*/
+
 function init() {
 
   canvas = document.getElementById('display');
@@ -372,67 +372,45 @@ function init() {
   document.addEventListener('drop', handleFileSelect, false);
   document.getElementById('file').addEventListener('change', handleFileSelect, false);
 
+  settings.updateQuality();
+
+  document.getElementById('quality').addEventListener('click', evt => {
+    settings.updateQuality(true);
+
+    evt.stopPropagation();
+    evt.preventDefault();
+    return false;
+  });
+
+
   mainLoop(performance.now());
 
   renderer = new WebGLRenderer(canvas);
 
-  window.addEventListener("dblclick", function(e) {
+  canvas.addEventListener("dblclick", function(e) {
     running = !running;
     if (!running) {
       spu.silence();
     }
   });
 
-  window.addEventListener("keydown", function(e) {
-    if (e.keyCode === 69) { /*  [^]  */ joy.devices[0].hi &= ~0x10; return; }
-    if (e.keyCode === 68) { /*  [O]  */ joy.devices[0].hi &= ~0x20; return; }
-    if (e.keyCode === 88) { /*  [X]  */ joy.devices[0].hi &= ~0x40; return; }
-    if (e.keyCode === 83) { /*  [#]  */ joy.devices[0].hi &= ~0x80; return; }
-
-    if (e.keyCode === 81) { /*  [L2] */ joy.devices[0].hi &= ~0x01; return; }
-    if (e.keyCode === 84) { /*  [R2] */ joy.devices[0].hi &= ~0x02; return; }
-    if (e.keyCode === 87) { /*  [L1] */ joy.devices[0].hi &= ~0x04; return; }
-    if (e.keyCode === 82) { /*  [R1] */ joy.devices[0].hi &= ~0x08; return; }
-
-    if (e.keyCode === 38) { /*  [u]  */ joy.devices[0].lo &= ~0x10; return; }
-    if (e.keyCode === 39) { /*  [r]  */ joy.devices[0].lo &= ~0x20; return; }
-    if (e.keyCode === 40) { /*  [d]  */ joy.devices[0].lo &= ~0x40; return; }
-    if (e.keyCode === 37) { /*  [l]  */ joy.devices[0].lo &= ~0x80; return; }
-
-    if (e.keyCode === 32) { /*  sel  */ joy.devices[0].lo &= ~0x01; return; }
-    if (e.keyCode === 13) { /* start */ joy.devices[0].lo &= ~0x08; return; }
-    if (e.keyCode === 122) return; //f11
-    if (e.keyCode === 123) return; //f12
-    if (e.keyCode === 116) return; //f5
+  window.addEventListener("keydown", function (e) {
+    if (e.key === 'F12') return; // allow developer tools
+    if (e.key === 'F11') return; // allow full screen
+    if (e.key === 'F5') return; // allow page refresh
     e.preventDefault();
   }, false);
 
   window.addEventListener("keyup", function(e) {
-    if (e.keyCode === 69) { /*  [^]  */ joy.devices[0].hi |= 0x10; }
-    if (e.keyCode === 68) { /*  [O]  */ joy.devices[0].hi |= 0x20; }
-    if (e.keyCode === 88) { /*  [X]  */ joy.devices[0].hi |= 0x40; }
-    if (e.keyCode === 83) { /*  [#]  */ joy.devices[0].hi |= 0x80; }
+    if (e.key === '1' && e.ctrlKey) renderer.setMode('disp');
+    if (e.key === '2' && e.ctrlKey) renderer.setMode('draw');
+    if (e.key === '3' && e.ctrlKey) renderer.setMode('clut8');
+    if (e.key === '4' && e.ctrlKey) renderer.setMode('clut4');
+    if (e.key === '0' && e.ctrlKey) renderer.setMode('page2');
 
-    if (e.keyCode === 81) { /*  [L2] */ joy.devices[0].hi |= 0x01; }
-    if (e.keyCode === 84) { /*  [R2] */ joy.devices[0].hi |= 0x02; }
-    if (e.keyCode === 87) { /*  [L1] */ joy.devices[0].hi |= 0x04; }
-    if (e.keyCode === 82) { /*  [R1] */ joy.devices[0].hi |= 0x08; }
-
-    if (e.keyCode === 38) { /*  [u]  */ joy.devices[0].lo |= 0x10; }
-    if (e.keyCode === 39) { /*  [r]  */ joy.devices[0].lo |= 0x20; }
-    if (e.keyCode === 40) { /*  [d]  */ joy.devices[0].lo |= 0x40; }
-    if (e.keyCode === 37) { /*  [l]  */ joy.devices[0].lo |= 0x80; }
-
-    if (e.keyCode === 32) { /*  sel  */ joy.devices[0].lo |= 0x01; }
-    if (e.keyCode === 13) { /* start */ joy.devices[0].lo |= 0x08; }
-
-    if (e.keyCode === 122) return;
-    if (e.keyCode === 123) return; //f12
-    if (e.keyCode === 116) return; //f5
-
-    if (e.key === 'F1' && e.ctrlKey) renderer.setMode('disp');
-    if (e.key === 'F2' && e.ctrlKey) renderer.setMode('vram');
-
+    if (e.key === 'F12') return; // allow developer tools
+    if (e.key === 'F11') return; // allow full screen
+    if (e.key === 'F5') return; // allow page refresh
     e.preventDefault();
   }, false);
 
@@ -448,6 +426,15 @@ function init() {
         header.classList.remove('nobios');
       }
       bios();
+    }
+  });
+  readStorageStream('card1', data => {
+    if (data) {
+      let data8 = new Uint8Array(data);
+      console.log('loading card1', data8.length);
+      for (let i = 0; i < 128*1024; ++i) {
+        joy.devices[0].data[i] = data8[i];
+      }
     }
   });
 }

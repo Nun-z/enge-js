@@ -31,7 +31,7 @@ var gpu = {
   dispT     : 16,
   dispX     : 0,
   dispY     : 0,
-  dmaBuffer : new Int32Array(256),
+  dmaBuffer : new Int32Array(256*4),
   dmaIndex  : 0,
   drawAreaX1: 0,
   drawAreaX2: 0,
@@ -93,7 +93,8 @@ var gpu = {
     return {x:gpu.dispX, y:gpu.dispY, w:width, h:height};
   },
 
-  onScanLine: function () {
+  onScanLine: function (scanline) {
+    gpu.hline = scanline;
     let interlaced = gpu.status & (1 << 22);
 	  let PAL = ((gpu.status >> 20) & 1) ? true : false;
     let vsync = PAL ? 314 : 263;
@@ -113,7 +114,8 @@ var gpu = {
       }
     }
     else {
-      if ((gpu.hline & 1) === 1) {
+      const oddLine = gpu.hline + (gpu.frame & 1); // toggle even/odd on every frame
+      if ((oddLine & 1) === 1) {
         gpu.status |= 0x80000000;
       }
       else {
@@ -122,10 +124,13 @@ var gpu = {
     }
     if (gpu.hline === vblankbegin) {
       renderer.onVBlankBegin();
-      gpu.status &= 0x7fffffff;
     }
     if (gpu.hline === vblankend) {
       renderer.onVBlankEnd();
+    }
+    if ((gpu.hline >= vblankbegin) || (gpu.hline < vblankend)) {
+      // always even during vlbank.
+      gpu.status &= 0x7fffffff;
     }
     if (++gpu.hline >= vsync) {
       cpu.istat |= 0x0001;
@@ -211,7 +216,8 @@ var gpu = {
 //                console.log(data & 0xf, hex(gpu.result));
                   break;
       case 0x40:  break; // ???
-      default:    abort('gpu.cmnd' + hex(data >>> 24, 2));
+      default:    //abort('gpu.cmnd' + hex(data >>> 24, 2));
+                  console.warn('gpu.cmnd' + hex(data >>> 24, 2));
     }
     gpu.updateTexturePage();
   },
@@ -396,9 +402,7 @@ var gpu = {
       dy = (dy & 0x1ff);
       sx = (sx & 0x3ff);
       sy = (sy & 0x1ff);
-      if (w === 0) w = 0x400;
-      if (h === 0) h = 0x200;
-      renderer.moveImage(sx, sy, dx, dy, w, h);
+      if (w*h) renderer.moveImage(sx, sy, dx, dy, w, h);
     }
   },
 
@@ -503,15 +507,14 @@ var gpu = {
 
   dmaTransferMode0200: function(addr, blck) {
     var transferSize = (blck >> 16) * (blck & 0xFFFF) << 1;
-    clearCodeCache( addr, transferSize << 1);
+    // clearCodeCache( addr, transferSize << 1); // optimistice assumption (performance reasons)
 
     gpu.transferTotal -= transferSize;
 
+    const img = gpu.img;
     while (--transferSize >= 0) {
-      const data = gpu.img.buffer[gpu.img.index];
+      const data = gpu.img.buffer[img.index++];
       map16[(addr & 0x001fffff) >>> 1] = data;
-      // map.setInt16(addr & 0x1fffff, value);
-      gpu.img.index++;
       addr += 2;
     }
 
@@ -529,11 +532,10 @@ var gpu = {
     var transferSize = (blck >> 16) * (blck & 0xFFFF) << 1;
     gpu.transferTotal -= transferSize;
 
+    const img = gpu.img;
     while (--transferSize >= 0) {
       const data = map16[(addr & 0x001fffff) >>> 1];
-      // var value = map.getInt16(addr & 0x1fffff);
-      gpu.img.buffer[gpu.img.index] = data;
-      gpu.img.index++;
+      img.buffer[img.index++] = data;
       addr += 2;
     }
 
@@ -566,12 +568,13 @@ var gpu = {
 
       while (nitem > 0) {
         // check for endless loop.
-        if (check[addr] === sequence) return;
-        check[addr] = sequence;
+        // if (check[addr] === sequence) return;
+        // check[addr] = sequence;
   
         const packetId = map[addr >> 2] >>> 24;
         if (packetSizes[packetId] === 0) {
           addr += 4; --nitem; ++words;
+          console.warn('invalid packetId:', hex(packetId, 2));
           continue;
         }
         if (((packetId >= 0x48) && (packetId < 0x50)) || ((packetId >= 0x58) && (packetId < 0x60))) {
@@ -617,7 +620,7 @@ var gpu = {
     }
     map[addr >> 2] = 0x00ffffff;
 
-    clearCodeCache(addr, transferSize << 2);
+    // clearCodeCache(addr, transferSize << 2); // optimistice assumption (performance reasons)
     return transferSize;
   },
 }

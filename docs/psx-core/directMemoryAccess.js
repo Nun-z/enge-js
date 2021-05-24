@@ -4,17 +4,18 @@ const dma = {
   dpcr: 0,
   dicr: 0,
 
-  r1080: 0, r1084: 0, r1088: 0,
-  r1090: 0, r1094: 0, r1098: 0,
-  r10a0: 0, r10a4: 0, r10a8: 0,
-  r10b0: 0, r10b4: 0, r10b8: 0,
-  r10c0: 0, r10c4: 0, r10c8: 0,
-  r10e0: 0, r10e4: 0, r10e8: 0,
+  r1080: 0, r1084: 0, r1088: 0, r1080n: 0,
+  r1090: 0, r1094: 0, r1098: 0, r1090n: 0,
+  r10a0: 0, r10a4: 0, r10a8: 0, r10a0n: 0,
+  r10b0: 0, r10b4: 0, r10b8: 0, r10b0n: 0,
+  r10c0: 0, r10c4: 0, r10c8: 0, r10c0n: 0,
+  r10e0: 0, r10e4: 0, r10e8: 0, r10e0n: 0,
 
   eventDMA0: null,
   completeDMA0: function (self, clock) {
     this.r1088 &= 0xfeffffff;
     if (dma.dicr & 0x00010000) {
+      this.r1080 = this.r1080n;
       dma.dicr  |= 0x81000000;
       cpu.istat |= 0x0008;
     }
@@ -25,6 +26,7 @@ const dma = {
   completeDMA1: function (self, clock) {
     this.r1098 &= 0xfeffffff;
     if (dma.dicr & 0x00020000) {
+      this.r1090 = this.r1090n;
       dma.dicr  |= 0x82000000;
       cpu.istat |= 0x0008;
     }
@@ -35,6 +37,7 @@ const dma = {
   completeDMA2: function (self, clock) {
     this.r10a8 &= 0xfeffffff;
     if (dma.dicr & 0x00040000) {
+      this.r10a0 = this.r10a0n;
       dma.dicr  |= 0x84000000;
       cpu.istat |= 0x0008;
     }
@@ -45,6 +48,7 @@ const dma = {
   completeDMA3: function (self, clock) {
     this.r10b8 &= 0xfeffffff;
     if (dma.dicr & 0x00080000) {
+      this.r10b0 = this.r10b0n;
       dma.dicr  |= 0x88000000;
       cpu.istat |= 0x0008;
     }
@@ -55,6 +59,7 @@ const dma = {
   completeDMA4: function (self, clock) {
     this.r10c8 &= 0xfeffffff;
     if (dma.dicr & 0x00100000) {
+      this.r10c0 = this.r10c0n;
       dma.dicr  |= 0x90000000;
       cpu.istat |= 0x0008;
     }
@@ -65,6 +70,7 @@ const dma = {
   completeDMA6: function (self, clock) {
     this.r10e8 &= 0xfeffffff;
     if (dma.dicr & 0x00400000) {
+      this.r108e0 = this.r10e0n;
       dma.dicr  |= 0xC0000000;
       cpu.istat |= 0x0008;
     }
@@ -110,7 +116,7 @@ const dma = {
       switch (ctrl) {
         case 0x00000000:  break;
         case 0x01000201:  transferSize = mdc.dmaTransferMode0201(this.r1080, this.r1084);
-                          this.r1080 += transferSize << 2;
+                          this.r1080n = this.r1080 + (transferSize << 2);
                           break;
 
         default:  abort('mdi-ctrl:'+hex(ctrl));
@@ -119,7 +125,7 @@ const dma = {
       psx.setEvent(this.eventDMA0, ((transferSize * 0x110) / 0x100) >>> 0);
     }
     else {
-      console.log('dma0 not enabled');
+      // console.log('dma0 not enabled');
       this.r1088 &= 0xfeffffff;
     }
   },
@@ -132,16 +138,16 @@ const dma = {
       switch (ctrl) {
         case 0x00000000:  break;
         case 0x01000200:  transferSize = mdc.dmaTransferMode0200(this.r1090, this.r1094);
-                          this.r1090 += transferSize << 2;
+                          this.r1090n = this.r1090 + (transferSize << 2);
                           break;
 
         default:  abort('mdo-ctrl:'+hex(ctrl));
       }
 
-      psx.setEvent(this.eventDMA1, ((transferSize * 0x110) / 0x100) >>> 0);
+      // psx.setEvent(this.eventDMA1, ((transferSize * 0x110) / 0x100) >>> 0);
     }
     else {
-      console.log('dma1 not enabled');
+      // console.log('dma1 not enabled');
       this.r1098 &= 0xfeffffff;
     }
   },
@@ -153,15 +159,16 @@ const dma = {
 
       switch (ctrl) {
         case 0x00000000:  break;
+        case 0x00000001:  break;
         case 0x00000401:  break;
         case 0x01000200:  transferSize = gpu.dmaTransferMode0200(this.r10a0, this.r10a4) || 10;
-                          this.r10a0 += transferSize << 2;
+                          this.r10a0n = this.r10a0 + (transferSize << 2);
                           break;
         case 0x01000201:  transferSize = gpu.dmaTransferMode0201(this.r10a0, this.r10a4) || 10;
-                          this.r10a0 += transferSize << 2;
+                          this.r10a0n = this.r10a0 + (transferSize << 2);
                           break;
         case 0x01000401:  transferSize = gpu.dmaTransferMode0401(this.r10a0, this.r10a4) || 10;
-                          this.r10a0 = 0x00ffffff;
+                          this.r10a0n = 0x00ffffff;
                           break;
 
         default:  abort('gpu-ctrl:'+hex(ctrl));
@@ -170,7 +177,7 @@ const dma = {
       psx.setEvent(this.eventDMA2, ((transferSize * 0x110) / 0x100) >>> 0);
     }
     else {
-      console.log('dma2 not enabled');
+      // console.log('dma2 not enabled');
       this.r10a8 &= 0xfeffffff;
     }
   },
@@ -183,8 +190,10 @@ const dma = {
       switch (ctrl) {
         case 0x00000000:  break;
         case 0x11000000:  transferSize = cdr.dmaTransferMode0000(this.r10b0, this.r10b4);
+                          this.r10b0n = this.r10b0 + (transferSize << 2);
                           break;
         case 0x11400100:  transferSize = cdr.dmaTransferMode0000(this.r10b0, this.r10b4);
+                          this.r10b0n = this.r10b0 + (transferSize << 2);
                           break;
 
         default:  abort('cd-ctrl:'+hex(ctrl));
@@ -193,7 +202,7 @@ const dma = {
       psx.setEvent(this.eventDMA3, ((transferSize * 0x2800) / 0x100) >>> 0);
     }
     else {
-      console.log('dma3 not enabled');
+      // console.log('dma3 not enabled');
       this.r10b8 &= 0xfeffffff;
     }
   },
@@ -206,11 +215,11 @@ const dma = {
       switch (ctrl) {
         case 0x01000000:  
         case 0x01000200:  transferSize = spu.dmaTransferMode0200(this.r10c0, this.r10c4);
-                          this.r10c0 += transferSize << 2;
+                          this.r10c0n = this.r10c0 + (transferSize << 2);
                           break;
         case 0x01000001:  
         case 0x01000201:  transferSize = spu.dmaTransferMode0201(this.r10c0, this.r10c4);
-                          this.r10c0 += transferSize << 2;
+                          this.r10c0n = this.r10c0 + (transferSize << 2);
                           break;
 
         default:  abort('spu-ctrl:'+hex(ctrl));
@@ -219,30 +228,32 @@ const dma = {
       psx.setEvent(this.eventDMA4, ((transferSize * 0x420) / 0x100) >>> 0);
     }
     else {
-      console.log('dma4 not enabled');
+      // console.log('dma4 not enabled');
       this.r10c8 &= 0xfeffffff;
     }
   },
 
   wr32r10e8: function(ctrl) {
-    this.r10e8 = ctrl;
+    this.r10e8 = (ctrl & 0x50000002) | 0x2;
     if (dma.dpcr & 0x08000000) {
       let transferSize = 10;
+        // console.log(hex(this.r10e0), hex(map[(this.r10e0 & 0x01ffffff) >> 2]));
 
-      switch (ctrl) {
-        case 0x00000000:  break;
-        case 0x01000002:  break;
-        case 0x10000002:  break;
-        case 0x11000002:  transferSize = gpu.dmaLinkedListMode0002(this.r10e0, this.r10e4);
+      switch (this.r10e8) {
+        case 0x00000002:  this.r10e0n = this.r10e0 = map[(this.r10e0 & 0x01ffffff) >> 2];
+                          break;
+        case 0x10000002:  
+        case 0x50000002:  transferSize = gpu.dmaLinkedListMode0002(this.r10e0, this.r10e4);
+                          this.r10e0n = 0x00ffffff;//this.r10e0 + (transferSize << 2);
                           break;
 
-        default:  abort('otc-ctrl:'+hex(ctrl));
+        default:  abort('otc-ctrl:'+hex(ctrl)+' '+hex(this.r10e8));
       }
 
       psx.setEvent(this.eventDMA6, ((transferSize * 0x110) / 0x100) >>> 0);
     }
     else {
-      console.log('dma6 not enabled');
+      // console.log('dma6 not enabled');
       this.r10e8 &= 0xfeffffff;
     }
   },

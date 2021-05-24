@@ -38,7 +38,6 @@ canvas {
 
 header {
   position: absolute;
-  font-size: 100px;
   font-weight: 900;
   z-index: 2;
   left: 16px;
@@ -136,17 +135,38 @@ nav > div {
   height: 10vh;
   margin-bottom: 1vh;
   margin-right: 1vw;
-}
-
-#gamepad {
-  background-image: url('images/gamepad.svg');
+  flex: none;
+  border: 0.5vh solid #555;
+  border-radius: 1vh;
+  cursor: pointer;
   background-size: 8vh;
   background-repeat: no-repeat;
   background-position: center;
-  border: 0.5vh solid #555;
-  border-radius: 1vh;
-  display: inline-block;
-  padding: 6px 12px;
+}
+
+nav > div:last-child {
+  margin-bottom: unset !important;
+  margin-right: unset !important;
+}
+
+nav > span {
+  flex: 1;
+}
+
+#globe {
+  background-image: url('images/globe.svg');
+}
+
+#gamepad {
+  background-image: url('images/keyboard.svg');
+}
+
+#gamepad.keyboard {
+  background-image: url('images/keyboard.svg');
+}
+
+#gamepad.gamepad {
+  background-image: url('images/gamepad.svg');
 }
 
 #gamepad.connected {
@@ -154,18 +174,24 @@ nav > div {
 }
 
 input[type="file"] {
-    display: none;
+  display: none;
 }
 .custom-file-upload {
-  border: 0.5vh solid #555;
-  border-radius: 1vh;
   display: inline-block;
-  padding: 6px 12px;
-  cursor: pointer;
-  width: 10vh;
-  height: 10vh;
+  width: 100%;
+  height: 100%;
   background-image: url('images/upload.svg');
-  background-size: 8vh;
-  background-repeat: no-repeat;
-  background-position: center;
+  cursor: pointer;
+}
+
+#quality {
+  text-align: center;
+  line-height: 9vh;
+  font-size: 5vh;
+  font-weight: bold;
+  color: rgb(80, 80, 80);
+}
+
+#quality.restart {
+  border: 0.5vh solid #a42;
 }
